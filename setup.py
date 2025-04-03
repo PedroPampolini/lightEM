@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="lightem",
-    version="0.0.23",
+    version="0.1.3",
     description="A light-weight python package for multi-table entity matching.",
     packages=find_packages(),  # Ajuste aqui
     package_dir={},  # Ajuste para o diretório 'lightem'

@@ -1,11 +1,10 @@
 from sklearn.cluster import DBSCAN
 import numpy as np
-from modules.Table import Table, TableManager
 from typing import *
-from modules.Embedder import Embedder, EmbedderTypes
-from modules.Matcher import Matcher, MatcherTypes
-from modules.Clusterer import Clusterer
-from modules.Table import DATABASE_TEXT_COLUMN_NAME
+from .Table import Table, TableManager, DATABASE_TEXT_COLUMN_NAME
+from .Embedder import Embedder, EmbedderTypes
+from .Matcher import Matcher, MatcherTypes
+from .Clusterer import Clusterer
 
 class EntityMatcher():
   def __init__(self, path: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False):

@@ -1,8 +1,6 @@
 from gensim.models import KeyedVectors
 from sentence_transformers import SentenceTransformer
-# import nltk
 import numpy as np
-# from nltk.corpus import stopwords
 from typing import *
 
 
