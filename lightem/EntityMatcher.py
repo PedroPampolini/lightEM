@@ -7,8 +7,8 @@ from .Matcher import Matcher, MatcherTypes
 from .Clusterer import Clusterer
 
 class EntityMatcher():
-  def __init__(self, path: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False):
-    self.path = path
+  def __init__(self, databasePath: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', gloveModelPath='', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False):
+    self.databasePath = databasePath
     self.embedderType = embedderType
     self.matcherType = matcherType
     self.threshold = threshold
@@ -16,11 +16,8 @@ class EntityMatcher():
     self.columnsToText = []
     for column in columnsToText:
       self.columnsToText.extend([column] * columnsToText[column])
+    self.gloveModelPath = gloveModelPath
       
-    self.k_neighbors = None
-    self.seed = None
-    self.metric = None
-    self.dim = None
   
   def __getSubCluster(self, cluster, pairs):
     # constroi a matrix a partir do grafo pra jogar no dbscan
@@ -59,11 +56,11 @@ class EntityMatcher():
 
   def pipeline(self):
     print("Starting pipeline...")
-    self.singleTable: Table = TableManager.createSingleTable(TableManager.openDatabase(self.path))
+    self.singleTable: Table = TableManager.createSingleTable(TableManager.openDatabase(self.databasePath))
     print(f"Single table created with {len(self.singleTable.database)} rows.")
     self.singleTable.createTextColumn(self.columnsToText)
     print("Text column created.")
-    self.embedder = Embedder(self.embedderType)
+    self.embedder = Embedder(self.embedderType, self.gloveModelPath)
     embeddings = [self.embedder.getEmbeddings(text) for text in self.singleTable[DATABASE_TEXT_COLUMN_NAME]]
     embeddings = [np.array(embedding) for embedding in embeddings]
     print("Embeddings created.")

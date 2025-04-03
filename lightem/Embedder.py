@@ -11,11 +11,12 @@ class Embedder():
   - sentence-transformers: Mais lento mas com embeddings de melhor qualidade
   - glove: Mais rápido mas com embeddings de qualidade inferior'''
   
-  def __init__(self, embedderType: EmbedderTypes):
+  def __init__(self, embedderType: EmbedderTypes, gloveModelPath: str=''):
     self.embedderType = embedderType
     match embedderType:
       case 'glove':
-        self.embedder = KeyedVectors.load_word2vec_format("models/bin/glove.6B.300d.bin", binary=True)
+        gloveModelPath = gloveModelPath if gloveModelPath else "models/bin/glove.6B.300d.bin"
+        self.embedder = KeyedVectors.load_word2vec_format(gloveModelPath, binary=True)
       case 'sentence-transformers':
         self.embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2')
       
