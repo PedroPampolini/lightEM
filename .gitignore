@@ -1,3 +1,8 @@
+# My Ignores
+data/
+bin/
+main.ipynb
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

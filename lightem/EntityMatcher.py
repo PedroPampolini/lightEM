@@ -7,13 +7,15 @@ from .Matcher import Matcher, MatcherTypes
 from .Clusterer import Clusterer
 
 class EntityMatcher():
-  def __init__(self, databasePath: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', gloveModelPath='', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False):
+  def __init__(self, databasePath: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', gloveModelPath='', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False, minLenghtToSubCluster: int=5, filterOversizedClusters: int=-1):
     self.databasePath = databasePath
     self.embedderType = embedderType
     self.matcherType = matcherType
     self.threshold = threshold
     self.runInLowMemory = runInLowMemory
     self.columnsToText = []
+    self.minLenghtToSubCluster = minLenghtToSubCluster
+    self.filterOversizedClusters = filterOversizedClusters
     for column in columnsToText:
       self.columnsToText.extend([column] * columnsToText[column])
     self.gloveModelPath = gloveModelPath
@@ -54,6 +56,11 @@ class EntityMatcher():
     newClusters = [cluster for cluster in newClusters.values()] # nao filtra por len(cluster) > 1 pois tem que retornar todos os nodos que haviam no cluster, para conseguir diferenciar, caso cluster = [1,2,3,4,5] e newCluster = [3,4,5], ele iria achar que nao teria aumentado a quantidade de clusters
     return newClusters
 
+  def __filterOversizedClusters(self):
+    if self.filterOversizedClusters == -1:
+      return
+    self.clusters = [cluster for cluster in self.clusters if len(cluster) <= self.filterOversizedClusters]
+
   def pipeline(self):
     print("Starting pipeline...")
     self.singleTable: Table = TableManager.createSingleTable(TableManager.openDatabase(self.databasePath))
@@ -62,17 +69,20 @@ class EntityMatcher():
     print("Text column created.")
     self.embedder = Embedder(self.embedderType, self.gloveModelPath)
     embeddings = [self.embedder.getEmbeddings(text) for text in self.singleTable[DATABASE_TEXT_COLUMN_NAME]]
+    del self.embedder
     embeddings = [np.array(embedding) for embedding in embeddings]
     print("Embeddings created.")
     self.matcher = Matcher(embeddings, runInLowMemory=self.runInLowMemory)
     if self.matcherType == 'knn':
       self.matcher.configureKNN(self.k_neighbors, self.seed, self.metric, self.dim)
     self.pairs = self.matcher.getPairs(self.threshold, self.matcherType)
+    del self.matcher
     print("Pairs created.")
     self.clusterer = Clusterer()
     self.clusterer.createGraph(self.pairs)
     print("Graph created. Creating clusters...")
     self.clusters = self.clusterer.getClusters()
+    del self.clusterer
     # filtra clusters com mais de 1 elemento
     self.clusters = [cluster for cluster in self.clusters if len(cluster) > 1]
     # Post-processing:
@@ -87,10 +97,14 @@ class EntityMatcher():
     # se achar mais de uma label
     # remove o cluster e adiciona os novos clusters
     for cluster in self.clusters:
+      if len(cluster) < self.minLenghtToSubCluster:
+        continue
       subCluster = self.__getSubCluster(cluster, self.pairs)
       if len(subCluster) > 1:
         self.clusters.remove(cluster)
         self.clusters.extend([cluster for cluster in subCluster if len(cluster) > 1])
+    
+    self.__filterOversizedClusters()
     print("Clusters created.")
     return self.clusters
     
