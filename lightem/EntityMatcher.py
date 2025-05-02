@@ -5,21 +5,34 @@ from .Table import Table, TableManager, DATABASE_TEXT_COLUMN_NAME
 from .Embedder import Embedder, EmbedderTypes
 from .Matcher import Matcher, MatcherTypes
 from .Clusterer import Clusterer
+import time
+import torch
+
+def log(*args):
+  now = time.localtime()
+  # formata como HH:MM:SS:ms
+  formatted_time = time.strftime("%H:%M:%S", now) + f".{int(now.tm_sec * 1000)}"
+  print(f"[{formatted_time}]: "+ " ".join(map(str, args)))  
 
 class EntityMatcher():
-  def __init__(self, databasePath: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', gloveModelPath='', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False, minLenghtToSubCluster: int=5, filterOversizedClusters: int=-1):
+  def __init__(self, databasePath: str, columnsToText: Dict[str, int], embedderType: EmbedderTypes='glove', gloveModelPath='', sentenceBertDevice='', matcherType: MatcherTypes='cosine', threshold: float=0.9, runInLowMemory: bool=False, batchSize: int=1000, minLenghtToSubCluster: int=5, filterOversizedClusters: int=-1):
     self.databasePath = databasePath
     self.embedderType = embedderType
     self.matcherType = matcherType
     self.threshold = threshold
     self.runInLowMemory = runInLowMemory
+    self.batchSize = batchSize
     self.columnsToText = []
     self.minLenghtToSubCluster = minLenghtToSubCluster
     self.filterOversizedClusters = filterOversizedClusters
     for column in columnsToText:
       self.columnsToText.extend([column] * columnsToText[column])
     self.gloveModelPath = gloveModelPath
-      
+    self.sentenceBertDevice = sentenceBertDevice if sentenceBertDevice else ('cuda' if torch.cuda.is_available() else 'cpu')
+  
+  def configureKnn(self, k_neighbors: int):
+    '''Configura o KNN para o matcher. O KNN é utilizado para encontrar os pares de entidades semelhantes.'''
+    self.k_neighbors = k_neighbors
   
   def __getSubCluster(self, cluster, pairs):
     # constroi a matrix a partir do grafo pra jogar no dbscan
@@ -44,7 +57,7 @@ class EntityMatcher():
         matrix[i, j] = distance
         matrix[j, i] = distance
     
-    eps = 1 - self.threshold
+    eps = 1 - self.threshold # 
     dbScan = DBSCAN(eps=eps, min_samples=2, algorithm='kd_tree', metric='manhattan')
     labels = dbScan.fit_predict(matrix)
     
@@ -62,25 +75,25 @@ class EntityMatcher():
     self.clusters = [cluster for cluster in self.clusters if len(cluster) <= self.filterOversizedClusters]
 
   def pipeline(self):
-    print("Starting pipeline...")
+    log("Starting pipeline...")
     self.singleTable: Table = TableManager.createSingleTable(TableManager.openDatabase(self.databasePath))
-    print(f"Single table created with {len(self.singleTable.database)} rows.")
+    log(f"Single table created with {len(self.singleTable.database)} rows.")
     self.singleTable.createTextColumn(self.columnsToText)
-    print("Text column created.")
+    log("Text column created. Creating embedder...")
     self.embedder = Embedder(self.embedderType, self.gloveModelPath)
     embeddings = [self.embedder.getEmbeddings(text) for text in self.singleTable[DATABASE_TEXT_COLUMN_NAME]]
     del self.embedder
     embeddings = [np.array(embedding) for embedding in embeddings]
-    print("Embeddings created.")
-    self.matcher = Matcher(embeddings, runInLowMemory=self.runInLowMemory)
+    log("Embeddings created. Creating matcher...")
+    self.matcher = Matcher(embeddings, runInLowMemory=self.runInLowMemory, batchSize=self.batchSize)
     if self.matcherType == 'knn':
-      self.matcher.configureKNN(self.k_neighbors, self.seed, self.metric, self.dim)
+      self.matcher.configureKnn(self.k_neighbors)
     self.pairs = self.matcher.getPairs(self.threshold, self.matcherType)
     del self.matcher
-    print("Pairs created.")
+    log("Pairs created. Creating graph...")
     self.clusterer = Clusterer()
     self.clusterer.createGraph(self.pairs)
-    print("Graph created. Creating clusters...")
+    log("Graph created. Creating clusters...")
     self.clusters = self.clusterer.getClusters()
     del self.clusterer
     # filtra clusters com mais de 1 elemento
@@ -105,6 +118,7 @@ class EntityMatcher():
         self.clusters.extend([cluster for cluster in subCluster if len(cluster) > 1])
     
     self.__filterOversizedClusters()
-    print("Clusters created.")
+    self.clusters = [tuple(cluster) for cluster in self.clusters]
+    log("Clusters created.")
     return self.clusters
     

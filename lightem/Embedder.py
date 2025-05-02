@@ -11,7 +11,7 @@ class Embedder():
   - sentence-transformers: Mais lento mas com embeddings de melhor qualidade
   - glove: Mais rápido mas com embeddings de qualidade inferior'''
   
-  def __init__(self, embedderType: EmbedderTypes, gloveModelPath: str=''):
+  def __init__(self, embedderType: EmbedderTypes, gloveModelPath: str='', sentenceBertDevice: str=''):
     self.embedderType = embedderType
     match embedderType:
       case 'glove':
@@ -19,6 +19,9 @@ class Embedder():
         self.embedder = KeyedVectors.load_word2vec_format(gloveModelPath, binary=True)
       case 'sentence-transformers':
         self.embedder = SentenceTransformer('sentence-transformers/all-MiniLM-L12-v2')
+        if sentenceBertDevice:
+          self.embedder.to(sentenceBertDevice)
+        print(f"Using device: {self.embedder.device}")
       
   
   def __preprocessSentence(self, sentence: str) -> str:
